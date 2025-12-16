@@ -5,12 +5,12 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import netifaces
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
-from homeassistant.helpers.typing import DiscoveryInfoType
 from slugify import slugify
 
 from .api import (
@@ -26,45 +26,13 @@ class ArednNodeFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_dhcp(
-        self, discovery_info: DiscoveryInfoType
-    ) -> config_entries.ConfigFlowResult:
-        """Handle discovery via DHCP."""
-        # We can get multiple DHCP discoveries for the same node, so we'll use the IP
-        # as the unique ID to avoid creating multiple entries.
-        await self.async_set_unique_id(discovery_info.ip)
-        self._abort_if_unique_id_configured(updates={CONF_HOST: discovery_info.ip})
-
-        try:
-            api_data = await self._get_data(discovery_info.ip)
-        except (ArednNodeApiClientCommunicationError, ArednNodeApiClientError):
-            return self.async_abort(reason="cannot_connect")
-
-        # The DHCP discovery may not have the final node name, so we'll update the
-        # unique ID to use the host from the API data if it's different.
-        if discovery_info.ip != api_data.get("node"):
-            await self.async_set_unique_id(
-                slugify(api_data.get("node")), raise_on_progress=False
-            )
-            self._abort_if_unique_id_configured(updates={CONF_HOST: discovery_info.ip})
-
-        self.context["title_placeholders"] = {
-            "name": api_data.get("node", discovery_info.ip)
-        }
-        return self.async_create_entry(
-            title=api_data.get("node", discovery_info.ip),
-            data={
-                CONF_HOST: discovery_info.ip,
-            },
-        )
-
     async def async_step_user(
         self,
         user_input: dict | None = None,
     ) -> config_entries.ConfigFlowResult:
         """Handle a flow initialized by the user."""
         _errors = {}
-        if user_input is not None:
+        if user_input:
             try:
                 await self._test_credentials(
                     host=user_input[CONF_HOST],
@@ -86,25 +54,50 @@ class ArednNodeFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     data=user_input,
                 )
 
+        # Discover potential nodes
+        hosts_to_check = {"localnode.local.mesh"}
+        try:
+            gateways = netifaces.gateways()
+            for gateway_info in gateways.get("default", {}).values():
+                hosts_to_check.add(gateway_info[0])
+        except Exception as e:
+            LOGGER.debug("Could not determine gateways with netifaces: %s", e)
+
+        discovered_hosts = []
+        if hosts_to_check:
+            results = await asyncio.gather(
+                *(self._test_credentials(host) for host in hosts_to_check),
+                return_exceptions=True,
+            )
+            for result in results:
+                if not isinstance(result, Exception) and isinstance(result, dict):
+                    discovered_hosts.append(result["host"])
+
+        schema = {}
+        if discovered_hosts:
+            schema[vol.Required(CONF_HOST)] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=discovered_hosts,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                    custom_value=True,
+                )
+            )
+        else:
+            schema[vol.Required(CONF_HOST)] = selector.TextSelector(
+                selector.TextSelectorConfig(
+                    type=selector.TextSelectorType.TEXT,
+                ),
+            )
+
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(
-                        CONF_HOST,
-                        default=(user_input or {}).get(CONF_HOST, vol.UNDEFINED),
-                    ): selector.TextSelector(
-                        selector.TextSelectorConfig(
-                            type=selector.TextSelectorType.TEXT,
-                        ),
-                    ),
-                },
-            ),
+            data_schema=vol.Schema(schema),
             errors=_errors,
         )
 
     async def _test_credentials(self, host: str) -> dict[str, Any]:
         """Validate credentials."""
+        LOGGER.debug("Attempting to connect to host %s", host)
         return await self._get_data(host)
 
     async def _get_data(self, host: str) -> dict[str, Any]:
@@ -113,4 +106,6 @@ class ArednNodeFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             host=host,
             session=async_create_clientsession(self.hass),
         )
-        return await client.async_get_data()
+        data = await client.async_get_data()
+        data["host"] = host  # Add host to data for discovery
+        return data
