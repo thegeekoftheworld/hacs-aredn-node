@@ -103,7 +103,7 @@ class ArednNodeFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         except Exception as e:
             LOGGER.debug("Could not determine gateways with netifaces: %s", e)
 
-        discovered_hosts = set()
+        discovered_nodes: dict[str, str] = {}  # {node_name: host}
         checked_hosts = set()
 
         # Perform a 2-level discovery
@@ -125,17 +125,36 @@ class ArednNodeFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 if isinstance(result, Exception) or not isinstance(result, dict):
                     continue
 
-                # Add the valid host to our discovered list
-                discovered_hosts.add(result["host"])
+                node_name = result.get("node")
+                if not node_name:
+                    continue
+
+                # Add the valid host to our discovered list, keyed by unique node name
+                # This prevents duplicates if a node is found via IP and hostname
+                # Prioritize specific hostnames over generic ones like 'localnode'.
+                if (
+                    node_name not in discovered_nodes
+                    or "localnode" in discovered_nodes.get(node_name, "")
+                ):
+                    discovered_nodes[node_name] = result["host"]
+
+                # Also try to probe the node by its own name, in case it's different
+                # from the host we used to find it (e.g., via localnode or IP).
+                if (node_fqdn := f"{node_name.lower()}.local.mesh") != result["host"]:
+                    hosts_to_check.add(node_fqdn)
 
                 # Add linked nodes to the list for the next pass
                 for link_ip, link_data in result.get("link_info", {}).items():
-                    hosts_to_check.add(link_ip)
+                    # Prioritize hostname, and if it's a short name, make it FQDN
                     if hostname := link_data.get("hostname"):
+                        if "." not in hostname:
+                            hostname += ".local.mesh"
                         hosts_to_check.add(hostname)
+                    else:  # Fallback to IP if no hostname
+                        hosts_to_check.add(link_ip)
 
         schema = {}
-        if discovered_hosts_list := sorted(list(discovered_hosts)):
+        if discovered_hosts_list := sorted(list(discovered_nodes.values())):
             schema[vol.Required(CONF_HOST)] = selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=discovered_hosts_list,
