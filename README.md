@@ -1,46 +1,69 @@
-# Notice
+# Home Assistant AREDN Node Integration
 
-The component and platforms in this repository are not meant to be used by a
-user, but as a "blueprint" that custom component developers can build
-upon, to make more awesome stuff.
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
 
-HAVE FUN! 😎
+This is a custom integration for [Home Assistant](https://www.home-assistant.io/) to monitor nodes on an [Amateur Radio Emergency Data Network (AREDN)](https://www.arednmesh.org/).
 
-## Why?
+It connects to AREDN nodes and creates sensors representing various information about them, including peer (linked) nodes, total number of nodes on the mesh, RF details, and other system information.
 
-This is simple, by having custom_components look (README + structure) the same
-it is easier for developers to help each other and for users to start using them.
+!AREDN Node Device View
 
-If you are a developer and you want to add things to this "blueprint" that you think more
-developers will have use for, please open a PR to add it :)
+## Features
 
-## What?
+- **Auto-Discovery**: Automatically probes your network gateways and `localnode.local.mesh` to find nearby nodes. It will even spider out to discover nodes linked from the initial nodes it finds.
+- **Rich Sensor Data**: Creates a wide variety of sensors for detailed monitoring and automation.
+- **Device-Centric**: Groups all sensors under a single Home Assistant device for each AREDN node.
+- **Dynamic Link Sensors**: Automatically creates sensors for each type of link (e.g., RF, WIREGUARD, DTD) your node reports.
+- **Reconfiguration**: Allows you to easily change the hostname or IP address of a configured node without removing and re-adding it.
 
-This repository contains multiple files, here is a overview:
+## Requirements
 
-File | Purpose | Documentation
--- | -- | --
-`.devcontainer.json` | Used for development/testing with Visual Studio Code. | [Documentation](https://code.visualstudio.com/docs/remote/containers)
-`.github/ISSUE_TEMPLATE/*.yml` | Templates for the issue tracker | [Documentation](https://help.github.com/en/github/building-a-strong-community/configuring-issue-templates-for-your-repository)
-`custom_components/integration_blueprint/*` | Integration files, this is where everything happens. | [Documentation](https://developers.home-assistant.io/docs/creating_component_index)
-`CONTRIBUTING.md` | Guidelines on how to contribute. | [Documentation](https://help.github.com/en/github/building-a-strong-community/setting-guidelines-for-repository-contributors)
-`LICENSE` | The license file for the project. | [Documentation](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/licensing-a-repository)
-`README.md` | The file you are reading now, should contain info about the integration, installation and configuration instructions. | [Documentation](https://help.github.com/en/github/writing-on-github/basic-writing-and-formatting-syntax)
-`requirements.txt` | Python packages used for development/lint/testing this integration. | [Documentation](https://pip.pypa.io/en/stable/user_guide/#requirements-files)
+This integration uses the `ucode` API endpoint for retrieving data. At this time, it will only work on firmware versions that support this endpoint (e.g., recent `babel-only` firmware).
 
-## How?
+- **ucode (supported):** `http://<node>/a/sysinfo`
+- **cgi-bin (not supported):** `http://<node>/cgi-bin/sysinfo.json`
 
-1. Create a new repository in GitHub, using this repository as a template by clicking the "Use this template" button in the GitHub UI.
-1. Open your new repository in Visual Studio Code devcontainer (Preferably with the "`Dev Containers: Clone Repository in Named Container Volume...`" option).
-1. Rename all instances of the `integration_blueprint` to `custom_components/<your_integration_domain>` (e.g. `custom_components/awesome_integration`).
-1. Rename all instances of the `Integration Blueprint` to `<Your Integration Name>` (e.g. `Awesome Integration`).
-1. Run the `scripts/develop` to start HA and test out your new integration.
+## Installation
 
-## Next steps
+The recommended way to install this integration is through the Home Assistant Community Store (HACS).
 
-These are some next steps you may want to look into:
-- Add tests to your integration, [`pytest-homeassistant-custom-component`](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) can help you get started.
-- Add brand images (logo/icon) to https://github.com/home-assistant/brands.
-- Create your first release.
-- Share your integration on the [Home Assistant Forum](https://community.home-assistant.io/).
-- Submit your integration to [HACS](https://hacs.xyz/docs/publish/start).
+1.  Search for "AREDN Node" in the HACS integrations tab and install it.
+2.  Restart Home Assistant.
+
+## Configuration
+
+1.  Navigate to **Settings > Devices & Services**.
+2.  Click **Add Integration** and search for "AREDN Node".
+3.  The configuration dialog will open. The integration will attempt to auto-discover nodes on your network and present them in a dropdown list.
+4.  Select a discovered node or manually enter the hostname or IP address of your AREDN node.
+5.  Click **Submit**. The integration will be configured, and a new device with all its sensors will be added.
+
+## Sensors
+
+This integration creates the following entities for each configured node. The node's name will be prepended to all entity names (e.g., `MYCALL-MYNODE Reachable`).
+
+### Binary Sensor
+
+| Entity | Description |
+| :--- | :--- |
+| **Reachable** | A connectivity sensor that is `On` if the node is reachable by Home Assistant. |
+
+### Sensors
+
+| Entity | Description | Category |
+| :--- | :--- | :--- |
+| **Linked Nodes** | The total count of directly connected peer nodes. | |
+| **Linked Nodes (RF)** | The count of directly connected RF peer nodes. (Dynamically created) | |
+| **Linked Nodes (WIREGUARD)** | The count of directly connected WireGuard peer nodes. (Dynamically created) | |
+| **Linked Nodes (DTD)** | The count of directly connected DtD peer nodes. (Dynamically created) | |
+| **Mesh Nodes** | The total number of nodes detected on the entire mesh. | |
+| **Mesh RF Status** | The status of the Mesh RF interface (e.g., `on`). | |
+| **Mesh RF SSID** | The SSID of the mesh radio. | |
+| **Mesh RF Frequency** | The frequency of the mesh radio in MHz. | |
+| **Mesh RF Channel Bandwidth** | The channel bandwidth of the mesh radio in MHz. | |
+| **API Version** | The version of the node's `sysinfo` API. | Diagnostic |
+| **Active Tunnels** | The number of active tunnels on the node. | Diagnostic |
+| **Boot Time** | A timestamp of when the node was last booted. | Diagnostic |
+| **Free Memory** | The amount of free memory in Kilobytes. | Diagnostic |
+| **Load (1m / 5m / 15m)** | The 1, 5, and 15-minute system load averages. | Diagnostic |
+| **Interface `[name]`** | The IP address of a given network interface (e.g., `br-lan`). | Diagnostic (Disabled by default) |
