@@ -241,6 +241,8 @@ class ArednNodeSensor(ArednNodeEntity, SensorEntity):
         """Initialize the sensor class."""
         super().__init__(coordinator)
         self.entity_description = entity_description
+        node_name = coordinator.data.get("node")
+        self._attr_name = f"{node_name} {entity_description.name}"
         self._attr_unique_id = (
             f"{coordinator.config_entry.entry_id}-{entity_description.key}"
         )
@@ -272,7 +274,8 @@ class ArednNodeInterfaceSensor(ArednNodeEntity, SensorEntity):
         """Initialize the sensor class."""
         super().__init__(coordinator)
         self._interface_name = interface_name
-        self._attr_name = f"Interface {interface_name}"
+        node_name = coordinator.data.get("node")
+        self._attr_name = f"{node_name} Interface {interface_name}"
         self._attr_unique_id = (
             f"{coordinator.config_entry.entry_id}-iface-{interface_name}"
         )
@@ -300,7 +303,8 @@ class ArednNodeLinkTypeSensor(ArednNodeEntity, SensorEntity):
         """Initialize the sensor class."""
         super().__init__(coordinator)
         self._link_type = link_type
-        self._attr_name = f"Linked Nodes ({link_type.title()})"
+        node_name = coordinator.data.get("node")
+        self._attr_name = f"{node_name} Linked Nodes ({link_type.title()})"
         self._attr_unique_id = (
             f"{coordinator.config_entry.entry_id}-linktype-{link_type.lower()}"
         )

@@ -47,6 +47,8 @@ class ArednNodeReachableSensor(ArednNodeEntity, BinarySensorEntity):
         """Initialize the sensor."""
         super().__init__(coordinator)
         self.entity_description = ENTITY_DESCRIPTION
+        node_name = coordinator.data.get("node")
+        self._attr_name = f"{node_name} {ENTITY_DESCRIPTION.name}"
         self._attr_unique_id = (
             f"{coordinator.config_entry.entry_id}-{ENTITY_DESCRIPTION.key}"
         )
