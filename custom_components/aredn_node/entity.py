@@ -5,24 +5,26 @@ from __future__ import annotations
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import ATTRIBUTION
-from .coordinator import BlueprintDataUpdateCoordinator
+from .const import DOMAIN, MANUFACTURER
+from .coordinator import ArednNodeDataUpdateCoordinator
 
 
-class IntegrationBlueprintEntity(CoordinatorEntity[BlueprintDataUpdateCoordinator]):
-    """BlueprintEntity class."""
+class ArednNodeEntity(CoordinatorEntity[ArednNodeDataUpdateCoordinator]):
+    """AREDN Node entity class."""
 
-    _attr_attribution = ATTRIBUTION
-
-    def __init__(self, coordinator: BlueprintDataUpdateCoordinator) -> None:
+    def __init__(self, coordinator: ArednNodeDataUpdateCoordinator) -> None:
         """Initialize."""
         super().__init__(coordinator)
-        self._attr_unique_id = coordinator.config_entry.entry_id
+        node_details = coordinator.data.get("node_details", {})
+        firmware_version = node_details.get("firmware_version")
+        model = node_details.get("model")
+        node_name = coordinator.data.get("node")
+
         self._attr_device_info = DeviceInfo(
-            identifiers={
-                (
-                    coordinator.config_entry.domain,
-                    coordinator.config_entry.entry_id,
-                ),
-            },
+            identifiers={(DOMAIN, coordinator.config_entry.entry_id)},
+            name=node_name,
+            manufacturer=MANUFACTURER,
+            model=model,
+            sw_version=firmware_version,
+            configuration_url=f"http://{coordinator.config_entry.data['host']}",
         )

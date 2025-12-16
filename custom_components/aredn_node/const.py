@@ -1,8 +1,11 @@
-"""Constants for integration_blueprint."""
+"""Constants for the AREDN Node integration."""
 
 from logging import Logger, getLogger
 
+from homeassistant.const import Platform
+
 LOGGER: Logger = getLogger(__package__)
 
-DOMAIN = "integration_blueprint"
-ATTRIBUTION = "Data provided by http://jsonplaceholder.typicode.com/"
+DOMAIN = "aredn_node"
+MANUFACTURER = "Amateur Radio Emergency Data Network"
+PLATFORMS: list[Platform] = [Platform.SENSOR]

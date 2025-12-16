@@ -4,22 +4,22 @@ from __future__ import annotations
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import CONF_HOST
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from slugify import slugify
 
 from .api import (
-    IntegrationBlueprintApiClient,
-    IntegrationBlueprintApiClientAuthenticationError,
-    IntegrationBlueprintApiClientCommunicationError,
-    IntegrationBlueprintApiClientError,
+    ArednNodeApiClient,
+    ArednNodeApiClientAuthenticationError,
+    ArednNodeApiClientCommunicationError,
+    ArednNodeApiClientError,
 )
 from .const import DOMAIN, LOGGER
 
 
-class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow for Blueprint."""
+class ArednNodeFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
+    """Config flow for AREDN Node."""
 
     VERSION = 1
 
@@ -32,28 +32,23 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 await self._test_credentials(
-                    username=user_input[CONF_USERNAME],
-                    password=user_input[CONF_PASSWORD],
+                    host=user_input[CONF_HOST],
                 )
-            except IntegrationBlueprintApiClientAuthenticationError as exception:
+            except ArednNodeApiClientAuthenticationError as exception:
                 LOGGER.warning(exception)
-                _errors["base"] = "auth"
-            except IntegrationBlueprintApiClientCommunicationError as exception:
+                _errors["base"] = "cannot_connect"
+            except ArednNodeApiClientCommunicationError as exception:
                 LOGGER.error(exception)
-                _errors["base"] = "connection"
-            except IntegrationBlueprintApiClientError as exception:
+                _errors["base"] = "cannot_connect"
+            except ArednNodeApiClientError as exception:
                 LOGGER.exception(exception)
                 _errors["base"] = "unknown"
             else:
-                await self.async_set_unique_id(
-                    ## Do NOT use this in production code
-                    ## The unique_id should never be something that can change
-                    ## https://developers.home-assistant.io/docs/config_entries_config_flow_handler#unique-ids
-                    unique_id=slugify(user_input[CONF_USERNAME])
-                )
+                await self.async_set_unique_id(slugify(user_input[CONF_HOST]))
                 self._abort_if_unique_id_configured()
+                api_data = await self._get_data(user_input[CONF_HOST])
                 return self.async_create_entry(
-                    title=user_input[CONF_USERNAME],
+                    title=api_data.get("node", user_input[CONF_HOST]),
                     data=user_input,
                 )
 
@@ -62,16 +57,11 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        CONF_USERNAME,
-                        default=(user_input or {}).get(CONF_USERNAME, vol.UNDEFINED),
+                        CONF_HOST,
+                        default=(user_input or {}).get(CONF_HOST, vol.UNDEFINED),
                     ): selector.TextSelector(
                         selector.TextSelectorConfig(
                             type=selector.TextSelectorType.TEXT,
-                        ),
-                    ),
-                    vol.Required(CONF_PASSWORD): selector.TextSelector(
-                        selector.TextSelectorConfig(
-                            type=selector.TextSelectorType.PASSWORD,
                         ),
                     ),
                 },
@@ -79,11 +69,14 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             errors=_errors,
         )
 
-    async def _test_credentials(self, username: str, password: str) -> None:
+    async def _test_credentials(self, host: str) -> None:
         """Validate credentials."""
-        client = IntegrationBlueprintApiClient(
-            username=username,
-            password=password,
+        await self._get_data(host)
+
+    async def _get_data(self, host: str) -> dict:
+        """Get data from the API."""
+        client = ArednNodeApiClient(
+            host=host,
             session=async_create_clientsession(self.hass),
         )
-        await client.async_get_data()
+        return await client.async_get_data()
