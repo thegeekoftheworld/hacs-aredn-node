@@ -371,12 +371,11 @@ class ArednNodeBootTimeSensor(ArednNodeEntity, SensorEntity):
         days_match = re.search(r"(\d+)\s+days?", uptime_str)
         time_match = re.search(r"(\d+):(\d+)", uptime_str)
 
-        boot_time = now - timedelta(
+        return now - timedelta(
             days=int(days_match.group(1)) if days_match else 0,
             hours=int(time_match.group(1)) if time_match else 0,
             minutes=int(time_match.group(2)) if time_match else 0,
         )
-        return boot_time
 
     @property
     def native_value(self) -> datetime | None:
