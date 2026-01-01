@@ -23,3 +23,6 @@ keep-runtime-typing = true
 
 [lint.mccabe]
 max-complexity = 25
+
+[tool.ruff]
+line-length = 120
